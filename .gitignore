@@ -1,0 +1,9 @@
+.gradle/
+build/
+.idea/
+*.iml
+run/
+logs/
+*.log
+.output.*
+config_doctor_backups/

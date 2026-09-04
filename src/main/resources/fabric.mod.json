@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "corruptconfigannihilator",
+  "version": "${version}",
+  "name": "CorruptConfigAnnihilator",
+  "description": "Quarantines unreadable config files on Play and restores pack-owned templates.",
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "preLaunch": [
+      "dev.autism.prominence.annihilator.Annihilator"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "minecraft": "~1.20.1"
+  }
+}

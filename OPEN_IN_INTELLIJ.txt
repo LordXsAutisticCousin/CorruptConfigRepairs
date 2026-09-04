@@ -1,0 +1,4 @@
+1. File > Open this folder (the one containing build.gradle).
+2. Do not open src directly.
+3. Allow Gradle to import and sync project dependencies.
+4. Run './gradlew build' or use IntelliJ's Gradle tool window (Tasks > build > build).
