@@ -1,0 +1,10 @@
+{
+  "reductions": [
+    {
+      "entity": "minecraft:warden",
+      "xp_mult": 0.05,
+      "base_xp_override": false,
+      "base_xp": 200
+    }
+  ]
+}
