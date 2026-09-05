@@ -1,6 +1,5 @@
 plugins {
     id "fabric-loom" version "${loom_version}"
-    id "maven-publish"
 }
 
 version = project.mod_version
@@ -21,6 +20,8 @@ dependencies {
 
     implementation include("com.electronwill.night-config:core:3.6.7")
     implementation include("com.electronwill.night-config:toml:3.6.7")
+
+    implementation include("com.fasterxml.jackson.core:jackson-core:2.17.2")
 
     testImplementation "org.junit.jupiter:junit-jupiter:5.10.2"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"

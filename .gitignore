@@ -6,4 +6,4 @@ run/
 logs/
 *.log
 .output.*
-config_doctor_backups/
+corruptconfigannihilator_backups/

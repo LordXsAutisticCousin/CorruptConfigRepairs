@@ -5,21 +5,20 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
 
 final class Repair {
     private static final Logger LOGGER = LoggerFactory.getLogger(Annihilator.MOD_ID);
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
+    static final String BACKUPS_DIR = Annihilator.MOD_ID + "_backups";
     static final int MAX_BACKUPS = 20;
 
     private Repair() {
@@ -28,13 +27,14 @@ final class Repair {
     static void run(Path gameDir) {
         Path config = gameDir.resolve("config");
         Path templates = config.resolve(Annihilator.MOD_ID).resolve("defaults");
-        Path backups = gameDir.resolve("config_doctor_backups").resolve(STAMP.format(LocalDateTime.now()));
+        Path backupsDir = gameDir.resolve(BACKUPS_DIR);
+        Path snapshot = backupsDir.resolve(STAMP.format(LocalDateTime.now()));
         List<String> log = new ArrayList<>();
-        int scannedCount = 0;
+        int scanned = 0;
 
         try {
             List<Path> files = ConfigWalk.list(config);
-            scannedCount = files.size();
+            scanned = files.size();
             for (Path file : files) {
                 if (!Integrity.isBroken(file)) {
                     continue;
@@ -42,24 +42,24 @@ final class Repair {
                 Path rel = config.relativize(file);
                 String name = rel.toString().replace('\\', '/');
                 LOGGER.warn("Corrupt config detected: {}", name);
-                if (backup(file, backups.resolve(rel), name, log)) {
+                if (backup(file, snapshot.resolve(rel), name, log)) {
                     restore(templates.resolve(rel), file, name, log);
                 }
             }
-        } catch (IOException e) {
-            String err = "walk-fail " + e.getClass().getName() + " " + e.getMessage();
-            log.add(err);
+        } catch (Exception e) {
+            log.add("walk-fail " + e);
             LOGGER.error("Failed to walk config directory: {}", e.getMessage(), e);
         }
 
         if (log.isEmpty()) {
-            LOGGER.info("Config scan complete. All {} configs healthy.", scannedCount);
+            LOGGER.info("Config scan complete. All {} configs healthy.", scanned);
+            log.add("scan-ok scanned=" + scanned);
         } else {
-            LOGGER.info("Config scan complete. {} actions taken across {} configs.", log.size(), scannedCount);
-            pruneOldBackups(gameDir.resolve("config_doctor_backups"));
+            LOGGER.info("Config scan complete. {} actions taken across {} configs.", log.size(), scanned);
+            pruneOldBackups(backupsDir);
         }
 
-        write(gameDir.resolve("logs").resolve(Annihilator.MOD_ID + ".log"), log, scannedCount);
+        writeLog(gameDir.resolve("logs").resolve(Annihilator.MOD_ID + ".log"), log);
     }
 
     private static boolean backup(Path file, Path target, String name, List<String> log) {
@@ -68,7 +68,7 @@ final class Repair {
             Files.move(file, target, StandardCopyOption.REPLACE_EXISTING);
             return true;
         } catch (Exception e) {
-            log.add("backup-fail " + name + " " + e.getClass().getName() + " " + e.getMessage());
+            log.add("backup-fail " + name + " " + e);
             LOGGER.error("Failed to backup {}: {}", name, e.getMessage(), e);
             return false;
         }
@@ -91,7 +91,7 @@ final class Repair {
             log.add("restore " + name);
             LOGGER.info("Restored {} from clean template", name);
         } catch (Exception e) {
-            log.add("restore-fail " + name + " " + e.getClass().getName() + " " + e.getMessage());
+            log.add("restore-fail " + name + " " + e);
             LOGGER.error("Failed to restore clean template for {}: {}", name, e.getMessage(), e);
         }
     }
@@ -103,7 +103,7 @@ final class Repair {
         try (Stream<Path> stream = Files.list(backupsDir)) {
             List<Path> dirs = stream
                 .filter(Files::isDirectory)
-                .sorted((a, b) -> a.getFileName().toString().compareTo(b.getFileName().toString()))
+                .sorted(Comparator.comparing(Path::getFileName))
                 .toList();
             if (dirs.size() > MAX_BACKUPS) {
                 int toDelete = dirs.size() - MAX_BACKUPS;
@@ -113,35 +113,24 @@ final class Repair {
                 LOGGER.info("Pruned {} old backup snapshot(s), keeping newest {}", toDelete, MAX_BACKUPS);
             }
         } catch (Exception e) {
-            LOGGER.warn("Failed to prune old backups: {}", e.getMessage());
+            LOGGER.warn("Failed to prune old backups: {}", e.getMessage(), e);
         }
     }
 
     private static void deleteRecursively(Path root) throws IOException {
-        Files.walkFileTree(root, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                Files.delete(file);
-                return FileVisitResult.CONTINUE;
+        try (Stream<Path> tree = Files.walk(root)) {
+            for (Path path : tree.sorted(Comparator.reverseOrder()).toList()) {
+                Files.delete(path);
             }
-
-            @Override
-            public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-                Files.delete(dir);
-                return FileVisitResult.CONTINUE;
-            }
-        });
+        }
     }
 
-    private static void write(Path file, List<String> log, int scannedCount) {
-        if (log.isEmpty()) {
-            log.add("scan-ok scanned=" + scannedCount);
-        }
+    private static void writeLog(Path file, List<String> log) {
         try {
             Files.createDirectories(file.getParent());
             Files.write(file, log, StandardCharsets.UTF_8);
         } catch (Exception e) {
-            LOGGER.error("{} log write failed: {}", Annihilator.MOD_ID, e.getMessage(), e);
+            LOGGER.error("Failed to write {}: {}", file, e.getMessage(), e);
         }
     }
 }
